@@ -1,0 +1,23 @@
+# --- ROS 2 build artifacts ---
+build/
+install/
+log/
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.pylintrc
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# --- OS specific ---
+thumbs.db
+desktop.ini

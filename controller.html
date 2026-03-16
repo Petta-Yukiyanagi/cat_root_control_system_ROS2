@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Robot Web Controller</title>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    
+    <style>
+        body { font-family: sans-serif; text-align: center; background-color: #f4f4f9; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto 20px auto; }
+        .status { font-weight: bold; color: gray; }
+        .connected { color: green; }
+        .error { color: red; }
+        
+        /* 十字キーのレイアウト */
+        .d-pad { display: grid; grid-template-columns: 60px 60px 60px; grid-gap: 10px; justify-content: center; margin-top: 20px; }
+        .d-pad button { padding: 15px; font-size: 18px; border: none; border-radius: 5px; background-color: #007bff; color: white; cursor: pointer; user-select: none; touch-action: manipulation;}
+        .d-pad button:active { background-color: #0056b3; }
+        .d-pad .empty { background: transparent; cursor: default; pointer-events: none; }
+        .stop-btn { background-color: #dc3545 !important; }
+        .stop-btn:active { background-color: #a71d2a !important; }
+        
+        /* UI入力フォーム */
+        .ui-form input { width: 90%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 14px;}
+        .ui-form button { width: 95%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 10px;}
+        .ui-form button:active { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+    <h2>🐱 Cat Robot Web Controller</h2>
+    
+    <div class="card">
+        <p>Tailscale IP Address:</p>
+        <input type="text" id="ws_url" value="ws://100.00.87.11:9090" style="width: 80%; padding: 8px; font-size: 14px; margin-bottom: 10px;">
+        <br>
+        <button onclick="connectROS()" style="padding: 8px 20px; cursor: pointer; border-radius: 5px; border: 1px solid #ccc;">Connect</button>
+        <p>Status: <span id="status" class="status">Disconnected</span></p>
+    </div>
+
+    <div class="card">
+        <h3>🏎️ Movement (cmd_vel)</h3>
+        <div class="d-pad">
+            <div class="empty"></div>
+            <button onmousedown="move(0.2, 0)" onmouseup="stop()" onmouseleave="stop()" ontouchstart="move(0.2, 0)" ontouchend="stop()">⬆️</button>
+            <div class="empty"></div>
+            <button onmousedown="move(0, 0.5)" onmouseup="stop()" onmouseleave="stop()" ontouchstart="move(0, 0.5)" ontouchend="stop()">⬅️</button>
+            <button class="stop-btn" onclick="stop()">⏹️</button>
+            <button onmousedown="move(0, -0.5)" onmouseup="stop()" onmouseleave="stop()" ontouchstart="move(0, -0.5)" ontouchend="stop()">➡️</button>
+            <div class="empty"></div>
+            <button onmousedown="move(-0.2, 0)" onmouseup="stop()" onmouseleave="stop()" ontouchstart="move(-0.2, 0)" ontouchend="stop()">⬇️</button>
+            <div class="empty"></div>
+        </div>
+        <p style="font-size: 12px; color: gray; margin-top: 15px;">ボタンを長押しで移動 / 離すと停止</p>
+    </div>
+
+    <div class="card ui-form">
+        <h3>🎭 UI & Expression</h3>
+        <input type="number" id="face_id" placeholder="Face ID (例: 1)" value="1">
+        <input type="text" id="text_msg" placeholder="テキスト (例: Lidar system: ONLINE)" value="Lidar system: ONLINE">
+        <input type="number" step="0.1" id="reset_after" placeholder="リセット時間 (秒)" value="5.0">
+        <button onclick="sendUICommand()">UIコマンドを送信</button>
+    </div>
+
+    <script>
+        let ros = null;
+        let cmdVelTopic = null;
+        let uiTopic = null;
+
+        function connectROS() {
+            const url = document.getElementById('ws_url').value;
+            const statusSpan = document.getElementById('status');
+            
+            // 既存の接続があれば閉じる
+            if (ros) { ros.close(); }
+
+            // ROS 2 Bridge に接続
+            ros = new ROSLIB.Ros({ url: url });
+
+            ros.on('connection', function() {
+                statusSpan.textContent = 'Connected!';
+                statusSpan.className = 'status connected';
+                
+                // cmd_vel トピックのセットアップ
+                cmdVelTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cmd_vel',
+                    messageType: 'geometry_msgs/msg/Twist'
+                });
+
+                // catui/command トピックのセットアップ (あなたの独自メッセージ型)
+                uiTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/catui/command',
+                    messageType: 'catui_msgs/msg/CatUICommand'
+                });
+            });
+
+            ros.on('error', function(error) {
+                statusSpan.textContent = 'Error: 接続失敗';
+                statusSpan.className = 'status error';
+                console.error("WebSocket Error: ", error);
+            });
+
+            ros.on('close', function() {
+                statusSpan.textContent = 'Disconnected';
+                statusSpan.className = 'status error';
+            });
+        }
+
+        // --- 移動コマンド (cmd_vel) の送信処理 ---
+        function move(linear, angular) {
+            if (!cmdVelTopic) return;
+            const twist = new ROSLIB.Message({
+                linear: { x: linear, y: 0.0, z: 0.0 },
+                angular: { x: 0.0, y: 0.0, z: angular }
+            });
+            cmdVelTopic.publish(twist);
+        }
+
+        // 停止コマンド (全て0にする)
+        function stop() {
+            move(0.0, 0.0);
+        }
+
+        // --- UIコマンド (catui/command) の送信処理 ---
+        function sendUICommand() {
+            if (!uiTopic) {
+                alert("先に上部の Connect ボタンを押して接続してください！");
+                return;
+            }
+            
+            // 入力フォームから値を取得
+            const faceId = parseInt(document.getElementById('face_id').value) || 0;
+            const textStr = document.getElementById('text_msg').value || "";
+            const resetTime = parseFloat(document.getElementById('reset_after').value) || 0.0;
+
+            // ROS 2 のカスタムメッセージ定義に合わせてデータを構築
+            const uiMsg = new ROSLIB.Message({
+                face_id: faceId,
+                text: textStr,
+                reset_after: resetTime
+            });
+
+            // トピックに配信 (Publish)
+            uiTopic.publish(uiMsg);
+            console.log("Sent UI Command:", uiMsg);
+        }
+    </script>
+</body>
+</html>
