@@ -46,12 +46,21 @@ echo "=== 5. ワークスペースの準備 ==="
 mkdir -p ~/ws/src
 
 echo "=== 6. .bashrc への環境設定の追加 ==="
+# リポジトリの絶対パスを取得
+REPO_PATH=$(cd $(dirname $0); pwd)
+
 if ! grep -q "CAT_ROBOT_ENV" ~/.bashrc; then
-cat << 'INNER_EOF' >> ~/.bashrc
+cat << INNER_EOF >> ~/.bashrc
 
 # --- CAT_ROBOT_ENV ---
 source /opt/ros/humble/setup.bash
 [ -f ~/ws/install/setup.bash ] && source ~/ws/install/setup.bash
+
+# 通信設定（リポジトリ内のファイルを正解とする）
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$REPO_PATH/cyclonedds.xml
+
+# GUI設定
 export LIBGL_ALWAYS_SOFTWARE=1
 export MESA_GL_VERSION_OVERRIDE=3.3
 # --- END ---
