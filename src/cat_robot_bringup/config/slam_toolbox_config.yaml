@@ -1,0 +1,20 @@
+/slam_toolbox:
+  ros__parameters:
+    use_sim_time: false
+    odom_frame: odom
+    base_frame: base_footprint
+    scan_topic: /scan
+    mode: mapping
+    map_update_interval: 5.0
+    max_laser_range: 12.0
+    minimum_time_interval: 0.5
+    transform_timeout: 1.0
+    tf_buffer_duration: 30.0
+
+    # --- ここから空転・ループ閉じ込み対策のパラメータ例 ---
+    # ループ閉じ込みを検知する最大半径（単位: メートル）。ここを広げると二重地図を防ぎやすくなります
+    loop_search_maximum_distance: 5.0
+    
+    # ループ閉じ込み成立の最低スコア（0.0〜1.0）。少し下げることで強引に過去の地図と繋げます
+    loop_match_minimum_chain_size: 3
+    loop_search_space_dimension: 8.0

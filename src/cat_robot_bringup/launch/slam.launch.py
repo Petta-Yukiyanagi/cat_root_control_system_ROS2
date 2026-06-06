@@ -1,31 +1,30 @@
 import os
+# パッケージのパスを動的に取得するための関数をインポート
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    map_config_path = os.path.expanduser('~/ws/src/cat_robot/cat_robot_bringup/maps/my_map')
+    # 1. cat_robot_bringup パッケージのインストール先（shareディレクトリ）のパスを自動取得
+    pkg_share = get_package_share_directory('cat_robot_bringup')
+    
+    # 2. パッケージのパスを起点に、各ファイルへのパスを結合する（これがROS2の相対パス指定）
+    slam_config_path = os.path.join(pkg_share, 'config', 'slam_toolbox_config.yaml')
+    map_config_path = os.path.join(pkg_share, 'maps', 'my_map')
 
     return LaunchDescription([
-        # SLAM Toolbox だけを残す
+        # SLAM Toolbox
         Node(
             package='slam_toolbox',
             executable='async_slam_toolbox_node',
             name='slam_toolbox',
             output='screen',
-            parameters=[{
-                'use_sim_time': False,
-                'odom_frame': 'odom',
-                'base_frame': 'base_footprint',
-                'scan_topic': '/scan',
-                'mode': 'mapping',
-                'map_update_interval': 5.0,
-                'max_laser_range': 12.0,
-                'minimum_time_interval': 0.5,
-                'transform_timeout': 1.0,
-                'tf_buffer_duration': 30.0,
-                'map_file_name': map_config_path,
-                'map_save_full_path': map_config_path
-            }]
+            parameters=[
+                slam_config_path,  # 自動取得したパスで読み込み
+                {
+                    'map_file_name': map_config_path,
+                    'map_save_full_path': map_config_path
+                }
+            ]
         ),
-        # ※ static_transform_publisher はラズパイ側で動いているので、ここでは削除！
     ])

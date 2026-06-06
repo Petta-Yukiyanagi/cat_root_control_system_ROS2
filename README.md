@@ -33,10 +33,20 @@ chmod +x install.sh
 ### 3. 起動
 次回以降は、このコマンドだけでシステムが立ち上がります。
 
+
 ```Bash
 cd ~/cat_robot_repo
 chmod +x start_cat_robot.sh
 ./start_cat_robot.sh
+```
+画面指定をする場合、下記を実行します。
+```Bash
+export DISPLAY=:0
+```
+DISPLAY値を確認する場合は、下記を実行します。
+
+```Bash
+echo $DISPLAY
 ```
 ### 4. 🎮 Webコントローラーの使用方法
 web_ui/controller.html をブラウザで開きます。
